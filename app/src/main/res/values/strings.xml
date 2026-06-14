@@ -1,0 +1,28 @@
+<resources>
+    <string name="app_name">MyClipboardTransferHelper</string>
+    <string name="welcome">Welcome！！</string>
+    <string name="imsender">I\'m Sender</string>
+    <string name="imreceiver">I\'m receiver</string>
+    <string name="closeapp">Close App</string>
+    <string name="welcome_receiver">Welcome,receiver!!</string>
+    <string name="startListen">Start Listen</string>
+    <string name="resultWillHere">The results will be here</string>
+    <string name="startFailed">Start failed!! %s</string>
+    <string name="stopListen">Stop Listen</string>
+    <string name="receiverStarted">Please connect at %s</string>
+    <string name="receiverStopped">Stopped!! You cannot connect now</string>
+    <string name="receiverReceived">Received %d bytes!!\n</string>
+    <string name="welcome_sender">Welcome,sender!!</string>
+    <string name="ip">IP</string>
+    <string name="Port">Port</string>
+    <string name="Connect">Connect</string>
+    <string name="senderTip">Paste or input any text here!</string>
+    <string name="debounceTime">Debounce time (ms)</string>
+    <string name="one_hundred">100</string>
+    <string name="invalid_ip_port">Enter IP and port please</string>
+    <string name="invalid_port">The port is not valid</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="connect_failed">"Cannot connect!! "</string>
+    <string name="connect">Connect</string>
+    <string name="send_failed">Send failed!! %s</string>
+</resources>
