@@ -10,8 +10,8 @@ android {
         applicationId = "top.clspd.apps.MyClipboardTransferHelper"
         minSdk = 28
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.0.0-release-vn-2(ARB)"
+        versionCode = 4
+        versionName = "2.0.0-release-vn4"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

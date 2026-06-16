@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:name="app.AppLogic.MainAppLogic.MyClipboardTransferHelper.AppClass"
         android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -14,7 +15,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyClipboardTransferHelper">
         <activity
+            android:name="app.MyApp.MyClipboardTransferHelper.security.ReceiverNewConnectionConfirmActivity"
+            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
+            android:exported="false" />
+        <activity
             android:name="app.MyApp.MyClipboardTransferHelper.MyActivity"
+            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -24,9 +30,11 @@
         </activity>
         <activity
             android:name="app.MyApp.MyClipboardTransferHelper.SenderActivity"
+            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
             android:exported="false" />
         <activity
             android:name="app.MyApp.MyClipboardTransferHelper.ReceiverActivity"
+            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
             android:exported="false" />
     </application>
 
