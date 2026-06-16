@@ -3,15 +3,19 @@ package app.MyApp.MyClipboardTransferHelper;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.appcompat.app.AlertDialog;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
@@ -29,6 +33,10 @@ import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
+import java.util.Map;
+import java.util.Random;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 
 import javax.net.ssl.SSLContext;
@@ -39,6 +47,8 @@ import app.AppLogic.MainAppLogic.MyClipboardTransferHelper.AppClass;
 import app.MyApp.MyClipboardTransferHelper.protocol.TLVHelper;
 import app.MyApp.MyClipboardTransferHelper.security.CryptoHelper;
 import app.MyApp.MyClipboardTransferHelper.security.ReceiverNewConnectionConfirmActivity;
+import app.MyApp.MyClipboardTransferHelper.services.KeepAliveService;
+import app.MyApp.MyClipboardTransferHelper.util.ThemeHelper;
 import top.clspd.apps.MyClipboardTransferHelper.R;
 
 public class ReceiverActivity extends AppCompatActivity {
@@ -52,6 +62,7 @@ public class ReceiverActivity extends AppCompatActivity {
     private EditText editTextResult;
     private EditText editTextPassword;
     private CheckBox checkBoxNeedConfirm;
+    private Spinner saveLocationSpinner;
     private Button buttonStart;
     private int port = 0;
 
@@ -73,9 +84,14 @@ public class ReceiverActivity extends AppCompatActivity {
             return insets;
         });
 
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
+        }
+
         editTextResult = findViewById(R.id.editTextText);
         editTextPassword = findViewById(R.id.editTextText2);
         checkBoxNeedConfirm = findViewById(R.id.checkBox);
+        saveLocationSpinner = findViewById(R.id.spinner);
         buttonStart = findViewById(R.id.buttonStart);
 
         // Load saved password
@@ -84,13 +100,21 @@ public class ReceiverActivity extends AppCompatActivity {
             try {
                 byte[] pwdBytes = new byte[(int) passwordFile.length()];
                 try (java.io.FileInputStream fis = new java.io.FileInputStream(passwordFile)) {
-                    fis.read(pwdBytes);
+                    int read = fis.read(pwdBytes);
+                    if (read != pwdBytes.length) {
+                        Log.w(TAG, "password file truncated");
+                    }
                 }
                 editTextPassword.setText(new String(pwdBytes, StandardCharsets.UTF_8));
             } catch (Exception e) {
                 Log.e(TAG, "failed to load password", e);
             }
         }
+
+        // Restore persisted UI state
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        checkBoxNeedConfirm.setChecked(prefs.getBoolean("receiver_need_confirm", false));
+        saveLocationSpinner.setSelection(prefs.getInt("receiver_save_location", 0));
 
         // Register launcher for confirmation activity
         confirmLauncher = registerForActivityResult(
@@ -105,6 +129,30 @@ public class ReceiverActivity extends AppCompatActivity {
 
     // ---- Connection state ----
 
+    private static class TransferSession {
+        final long sessionId;
+        final String filename;
+        final long fileSize;
+        final File tempFile;
+        FileOutputStream fos;
+        long bytesReceived;
+
+        TransferSession(long sessionId, String filename, long fileSize, File tempFile) {
+            this.sessionId = sessionId;
+            this.filename = filename;
+            this.fileSize = fileSize;
+            this.tempFile = tempFile;
+            this.bytesReceived = 0;
+        }
+
+        void close() {
+            try { if (fos != null) fos.close(); } catch (IOException ignored) {}
+            if (!tempFile.delete()) {
+                Log.w(TAG, "Failed to delete temp file: " + tempFile);
+            }
+        }
+    }
+
     private static class ClientConnection {
         SSLSocket socket;
         DataInputStream in;
@@ -112,6 +160,8 @@ public class ReceiverActivity extends AppCompatActivity {
         boolean authenticated;
         Thread readThread;
         Thread heartbeatThread;
+        final Object outLock = new Object();
+        final Map<Long, TransferSession> sessions = new ConcurrentHashMap<>();
 
         ClientConnection(SSLSocket socket, DataInputStream in, DataOutputStream out) {
             this.socket = socket;
@@ -123,7 +173,10 @@ public class ReceiverActivity extends AppCompatActivity {
         void close() {
             if (heartbeatThread != null) heartbeatThread.interrupt();
             if (readThread != null) readThread.interrupt();
-            // TLS close_notify requires network I/O — must be off main thread
+            // Clean up all active sessions
+            for (TransferSession s : sessions.values()) s.close();
+            sessions.clear();
+            /* TLS close_notify requires network I/O — must be off main thread */
             new Thread(() -> {
                 try { in.close(); } catch (IOException ignored) {}
                 try { out.close(); } catch (IOException ignored) {}
@@ -146,7 +199,10 @@ public class ReceiverActivity extends AppCompatActivity {
         // Save password
         String password = editTextPassword.getText().toString();
         try {
-            new File(getFilesDir(), AppClass.RECEIVER_DIR).mkdirs();
+            File receiverDir = new File(getFilesDir(), AppClass.RECEIVER_DIR);
+            if (!receiverDir.mkdirs() && !receiverDir.isDirectory()) {
+                Log.w(TAG, "Failed to create receiver directory");
+            }
             try (FileOutputStream fos = new FileOutputStream(passwordFile)) {
                 fos.write(password.getBytes(StandardCharsets.UTF_8));
             }
@@ -163,14 +219,20 @@ public class ReceiverActivity extends AppCompatActivity {
                 port = serverSocket.getLocalPort();
                 started = true;
 
+                String fingerprint = CryptoHelper.getCertificateSha256Fingerprint(
+                        CryptoHelper.loadCertificateFromFile(certFile));
+
                 runOnUiThread(() -> {
                     buttonStart.setText(R.string.stopListen);
                     editTextResult.setText("");
-                    String message = getString(R.string.receiverStarted, getLocalIp() + ":" + port);
+                    String message = getString(R.string.receiverStarted, getLocalIp() + ":" + port, fingerprint);
                     editTextResult.setText(message);
                     editTextPassword.setEnabled(false);
                     checkBoxNeedConfirm.setEnabled(false);
                 });
+
+                ensureNotificationPermission();
+                KeepAliveService.start(ReceiverActivity.this);
 
                 while (started && !serverSocket.isClosed()) {
                     try {
@@ -220,7 +282,7 @@ public class ReceiverActivity extends AppCompatActivity {
                 // Load server's own cert fingerprint for display in confirm dialog
                 File certFile = new File(getFilesDir(), AppClass.RECEIVER_DIR + File.separator + AppClass.CERT_FILE);
                 X509Certificate serverCert = CryptoHelper.loadCertificateFromFile(certFile);
-                String serverFingerprint = CryptoHelper.getCertificateSha1Fingerprint(serverCert);
+                String serverFingerprint = CryptoHelper.getCertificateSha256Fingerprint(serverCert);
 
                 while (started && !conn.socket.isClosed()) {
                     TLVHelper.TLVMessage msg = TLVHelper.readMessage(conn.in);
@@ -248,6 +310,22 @@ public class ReceiverActivity extends AppCompatActivity {
                                     editTextResult.append(getString(R.string.receiverReceivedFrom, msg.length, clientIp, clientPort));
                                 });
                             }
+                            break;
+
+                        case TLVHelper.TYPE_FILE_TRANSFER_SESSION_CREATE:
+                            if (conn.authenticated) handleSessionCreate(conn, msg.value);
+                            break;
+
+                        case TLVHelper.TYPE_FILE_TRANSFER_FILE_DATA:
+                            if (conn.authenticated) handleFileChunk(conn, msg.value);
+                            break;
+
+                        case TLVHelper.TYPE_FILE_TRANSFER_SESSION_COMMIT:
+                            if (conn.authenticated) handleSessionCommit(conn, msg.value, clientIp, clientPort);
+                            break;
+
+                        case TLVHelper.TYPE_FILE_TRANSFER_SESSION_CANCEL:
+                            if (conn.authenticated) handleSessionCancel(conn, msg.value);
                             break;
 
                         default:
@@ -280,7 +358,7 @@ public class ReceiverActivity extends AppCompatActivity {
                                   String clientIp, int clientPort, String fingerprint) throws IOException {
         if (savedPassword.isEmpty()) {
             // No password set: check needConfirm then authenticate directly
-            if (!checkNeedConfirm(clientIp, clientPort, fingerprint)) {
+            if (isRejectedByUser(clientIp, clientPort, fingerprint)) {
                 logToUI(getString(R.string.connection_rejected) + "\n");
                 conn.close();
                 synchronized (this) { if (activeClient == conn) activeClient = null; }
@@ -306,7 +384,7 @@ public class ReceiverActivity extends AppCompatActivity {
         }
 
         // Password correct — now do needConfirm as the final gate
-        if (!checkNeedConfirm(clientIp, clientPort, fingerprint)) {
+        if (isRejectedByUser(clientIp, clientPort, fingerprint)) {
             logToUI(getString(R.string.connection_rejected) + "\n");
             conn.close();
             synchronized (this) { if (activeClient == conn) activeClient = null; }
@@ -318,11 +396,10 @@ public class ReceiverActivity extends AppCompatActivity {
         sendAuthFeedback(conn.out, 0x00000001L);
     }
 
-    private boolean checkNeedConfirm(String clientIp, int clientPort, String fingerprint) {
+    private boolean isRejectedByUser(String clientIp, int clientPort, String fingerprint) {
         if (!checkBoxNeedConfirm.isChecked()) {
-            return true;
+            return false;
         }
-        // Launch confirm activity and wait for result
         confirmLatch = new CountDownLatch(1);
         confirmResult = false;
 
@@ -337,7 +414,7 @@ public class ReceiverActivity extends AppCompatActivity {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        return confirmResult;
+        return !confirmResult;
     }
 
     private void sendAuthFeedback(DataOutputStream out, long status) throws IOException {
@@ -353,13 +430,157 @@ public class ReceiverActivity extends AppCompatActivity {
         TLVHelper.sendMessage(out, TLVHelper.TYPE_AUTH_FEEDBACK, value);
     }
 
+    // ---- File transfer session handlers ----
+
+    private void handleSessionCreate(ClientConnection conn, byte[] value) {
+        try {
+            if (value.length < 12) return;
+            int nameLen = ((value[0] & 0xFF) << 24) | ((value[1] & 0xFF) << 16)
+                    | ((value[2] & 0xFF) << 8) | (value[3] & 0xFF);
+            if (4 + nameLen + 8 > value.length) return;
+            String filename = new String(value, 4, nameLen, StandardCharsets.UTF_8);
+            long fileSize = TLVHelper.bytesToLong(value, 4 + nameLen);
+
+            long sessionId = new Random().nextLong() & Long.MAX_VALUE;
+            // Ensure uniqueness
+            while (conn.sessions.containsKey(sessionId)) sessionId = new Random().nextLong() & Long.MAX_VALUE;
+
+            File tempDir = new File(getCacheDir(), AppClass.TRANSFER_TEMP_DIR);
+            if (!tempDir.mkdirs() && !tempDir.isDirectory()) return;
+            File tempFile = new File(tempDir, UUID.randomUUID().toString());
+            FileOutputStream fos = new FileOutputStream(tempFile);
+
+            TransferSession session = new TransferSession(sessionId, filename, fileSize, tempFile);
+            session.fos = fos;
+            conn.sessions.put(sessionId, session);
+
+            byte[] reply = new byte[9];
+            System.arraycopy(TLVHelper.longToBytes(sessionId), 0, reply, 0, 8);
+            reply[8] = 0x01; // accepted
+            synchronized (conn.outLock) {
+                TLVHelper.sendMessage(conn.out, TLVHelper.TYPE_FILE_TRANSFER_SESSION_CREATE_RESULT, reply);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "session create error", e);
+        }
+    }
+
+    private void handleFileChunk(ClientConnection conn, byte[] value) {
+        try {
+            if (value.length < 8) return;
+            long sessionId = TLVHelper.bytesToLong(value, 0);
+            TransferSession session = conn.sessions.get(sessionId);
+            if (session == null) return;
+
+            int chunkLen = value.length - 8;
+            session.fos.write(value, 8, chunkLen);
+            session.bytesReceived += chunkLen;
+
+            // Send ACK
+            byte[] ack = TLVHelper.longToBytes(sessionId);
+            synchronized (conn.outLock) {
+                TLVHelper.sendMessage(conn.out, TLVHelper.TYPE_FILE_TRANSFER_FILE_DATA_ACCEPTED, ack);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "file chunk error", e);
+        }
+    }
+
+    private void handleSessionCommit(ClientConnection conn, byte[] value, String clientIp, int clientPort) {
+        try {
+            if (value.length < 8) return;
+            long sessionId = TLVHelper.bytesToLong(value, 0);
+            TransferSession session = conn.sessions.remove(sessionId);
+            byte resultCode;
+
+            if (session == null) {
+                resultCode = 0x00;
+            } else {
+                session.fos.close();
+                session.fos = null;
+
+                int saveMode = saveLocationSpinner.getSelectedItemPosition();
+                if (saveMode == 0) {
+                    saveToDownloads(session.tempFile, session.filename);
+                } else {
+                    saveToInternal(session.tempFile, session.filename);
+                }
+                if (!session.tempFile.delete()) {
+                    Log.w(TAG, "Failed to delete temp file: " + session.tempFile);
+                }
+                logToUI(getString(R.string.received_file, session.filename,
+                        session.bytesReceived, clientIp, clientPort));
+                resultCode = 0x01;
+            }
+
+            byte[] reply = new byte[9];
+            System.arraycopy(TLVHelper.longToBytes(sessionId), 0, reply, 0, 8);
+            reply[8] = resultCode;
+            synchronized (conn.outLock) {
+                TLVHelper.sendMessage(conn.out, TLVHelper.TYPE_FILE_TRANSFER_SESSION_RESULT, reply);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "session commit error", e);
+        }
+    }
+
+    private void handleSessionCancel(ClientConnection conn, byte[] value) {
+        if (value.length < 8) return;
+        long sessionId = TLVHelper.bytesToLong(value, 0);
+        TransferSession session = conn.sessions.remove(sessionId);
+        if (session != null) session.close();
+    }
+
+    private void saveToDownloads(File tempFile, String filename) throws IOException {
+        File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
+                android.os.Environment.DIRECTORY_DOWNLOADS);
+        File outFile = findAvailableInternalFile(downloadsDir, filename);
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile);
+             FileOutputStream fos = new FileOutputStream(outFile)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
+        }
+        android.media.MediaScannerConnection.scanFile(this,
+                new String[]{outFile.getAbsolutePath()}, null, null);
+        logToUI("Saved to Downloads: " + outFile.getName() + "\n");
+    }
+
+    private void saveToInternal(File tempFile, String filename) throws IOException {
+        File dir = new File(getFilesDir(), AppClass.RECEIVED_FILES_DIR);
+        if (!dir.mkdirs() && !dir.isDirectory()) {
+            Log.w(TAG, "Failed to create download directory");
+            return;
+        }
+        File outFile = findAvailableInternalFile(dir, filename);
+        try (java.io.FileInputStream fis = new java.io.FileInputStream(tempFile);
+             FileOutputStream fos = new FileOutputStream(outFile)) {
+            byte[] buf = new byte[8192];
+            int n;
+            while ((n = fis.read(buf)) != -1) fos.write(buf, 0, n);
+        }
+    }
+
+    private File findAvailableInternalFile(File dir, String filename) {
+        int dot = filename.lastIndexOf('.');
+        String base = dot > 0 ? filename.substring(0, dot) : filename;
+        String ext = dot > 0 ? filename.substring(dot) : "";
+        File candidate = new File(dir, filename);
+        int i = 1;
+        while (candidate.exists()) {
+            candidate = new File(dir, base + " (" + i + ")" + ext);
+            i++;
+        }
+        return candidate;
+    }
+
     private void startHeartbeat(ClientConnection conn) {
         conn.heartbeatThread = new Thread(() -> {
             while (started && !conn.socket.isClosed()) {
                 try {
                     Thread.sleep(HEARTBEAT_INTERVAL_MS);
                     if (!conn.socket.isClosed()) {
-                        synchronized (conn.out) {
+                        synchronized (conn.outLock) {
                             TLVHelper.sendHeartbeat(conn.out);
                         }
                     }
@@ -379,6 +600,7 @@ public class ReceiverActivity extends AppCompatActivity {
 
     private void stopServer() {
         started = false;
+        KeepAliveService.stop(ReceiverActivity.this);
         synchronized (this) {
             if (activeClient != null) {
                 activeClient.close();
@@ -406,6 +628,32 @@ public class ReceiverActivity extends AppCompatActivity {
 
     // ---- UI logging ----
 
+    private void ensureNotificationPermission() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED) return;
+        SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
+        if (prefs.getBoolean("notification_explained", false)) return;
+        prefs.edit().putBoolean("notification_explained", true).apply();
+        runOnUiThread(() -> new AlertDialog.Builder(ReceiverActivity.this)
+                .setTitle(R.string.notification_permission_title)
+                .setMessage(R.string.notification_permission_message)
+                .setPositiveButton(android.R.string.ok, (d, w) ->
+                        requestPermissions(new String[]{android.Manifest.permission.POST_NOTIFICATIONS}, 0))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show());
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 0 && grantResults.length > 0
+                && grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            KeepAliveService.stop(ReceiverActivity.this);
+            KeepAliveService.start(ReceiverActivity.this);
+        }
+    }
+
     private void logToUI(String message) {
         runOnUiThread(() -> editTextResult.append(message));
     }
@@ -423,6 +671,32 @@ public class ReceiverActivity extends AppCompatActivity {
             }
         } catch (Exception ignored) {}
         return "???";
+    }
+
+    @Override
+    public boolean onSupportNavigateUp() {
+        finish();
+        return true;
+    }
+
+    @Override
+    public void onConfigurationChanged(android.content.res.Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        int nightMask = newConfig.uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+        if (nightMask == android.content.res.Configuration.UI_MODE_NIGHT_YES
+                || nightMask == android.content.res.Configuration.UI_MODE_NIGHT_NO) {
+            ThemeHelper.refreshNightMode(this);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        getSharedPreferences("app_prefs", MODE_PRIVATE)
+                .edit()
+                .putBoolean("receiver_need_confirm", checkBoxNeedConfirm.isChecked())
+                .putInt("receiver_save_location", saveLocationSpinner.getSelectedItemPosition())
+                .apply();
     }
 
     @Override

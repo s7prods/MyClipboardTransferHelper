@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="receiver_save_files_to">
+        <item>Download directory (Recommended)</item>
+        <item>Internal data directory</item>
+    </string-array>
+</resources>

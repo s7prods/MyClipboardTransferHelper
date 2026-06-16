@@ -3,6 +3,20 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="content" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
 
     <application
         android:name="app.AppLogic.MainAppLogic.MyClipboardTransferHelper.AppClass"
@@ -15,13 +29,10 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyClipboardTransferHelper">
         <activity
-            android:name="app.MyApp.MyClipboardTransferHelper.security.ReceiverNewConnectionConfirmActivity"
-            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
-            android:exported="false" />
-        <activity
             android:name="app.MyApp.MyClipboardTransferHelper.MyActivity"
-            android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
-            android:exported="true">
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="true"
+            android:theme="@style/Theme.MyClipboardTransferHelper.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -31,11 +42,65 @@
         <activity
             android:name="app.MyApp.MyClipboardTransferHelper.SenderActivity"
             android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
-            android:exported="false" />
+            android:exported="false"
+            android:label="@string/welcome_sender"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.MyActivity" />
         <activity
             android:name="app.MyApp.MyClipboardTransferHelper.ReceiverActivity"
             android:configChanges="orientation|screenSize|screenLayout|uiMode|keyboardHidden"
-            android:exported="false" />
+            android:exported="false"
+            android:label="@string/welcome_receiver"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.MyActivity" />
+        <activity
+            android:name="app.MyApp.MyClipboardTransferHelper.security.ReceiverNewConnectionConfirmActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:exported="false"
+            android:label="@string/clientAttemptConnect_Title"
+            android:theme="@style/Theme.MyClipboardTransferHelper.NoActionBar"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.ReceiverActivity" />
+        <activity
+            android:name="app.MyApp.MyClipboardTransferHelper.management.KnownHostsManagementActivity"
+            android:exported="false"
+            android:label="@string/known_hosts_title"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.MyActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="app.MyApp.MyClipboardTransferHelper.management.SettingsActivity"
+            android:exported="true"
+            android:label="@string/settings"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.MyActivity"
+            android:windowSoftInputMode="adjustResize" />
+        <activity
+            android:name="app.MyApp.MyClipboardTransferHelper.management.InternalReceivedFilesManagementActivity"
+            android:exported="false"
+            android:label="@string/manage_received_files"
+            android:parentActivityName="app.MyApp.MyClipboardTransferHelper.MyActivity" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="@string/provider_transferred_files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <provider
+            android:name="app.AppLogic.MainAppLogic.MyClipboardTransferHelper.interophelper.InternalReceivedFilesMyDPClass"
+            android:permission="android.permission.MANAGE_DOCUMENTS"
+            android:exported="true"
+            android:authorities="${applicationId}.documents"
+            android:grantUriPermissions="true">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
+
+        <service
+            android:name="app.MyApp.MyClipboardTransferHelper.services.KeepAliveService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
     </application>
 
 </manifest>

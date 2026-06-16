@@ -231,8 +231,8 @@ public class CryptoHelper {
 
     // ---- Certificate fingerprint and loading ----
 
-    public static String getCertificateSha1Fingerprint(X509Certificate cert) throws Exception {
-        MessageDigest md = MessageDigest.getInstance("SHA-1");
+    public static String getCertificateSha256Fingerprint(X509Certificate cert) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         byte[] digest = md.digest(cert.getEncoded());
         StringBuilder sb = new StringBuilder();
         for (byte b : digest) {

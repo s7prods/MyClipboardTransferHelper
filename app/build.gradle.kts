@@ -1,17 +1,19 @@
+import com.android.build.api.dsl.ApplicationExtension
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
-android {
+configure<ApplicationExtension> {
     namespace = "top.clspd.apps.MyClipboardTransferHelper"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "top.clspd.apps.MyClipboardTransferHelper"
-        minSdk = 28
-        targetSdk = 36
-        versionCode = 4
-        versionName = "2.0.0-release-vn4"
+        minSdk = 26
+        targetSdk = 37
+        versionCode = 6
+        versionName = "3.0.0-release-vn-6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -34,6 +36,7 @@ android {
         }
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -49,6 +52,7 @@ android {
 
 dependencies {
 
+    implementation(libs.activity.ktx)
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.activity)
@@ -56,4 +60,9 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
+}
+android {
+    buildFeatures {
+        viewBinding = true
+    }
 }
