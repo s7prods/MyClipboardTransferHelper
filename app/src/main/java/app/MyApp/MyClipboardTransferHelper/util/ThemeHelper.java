@@ -27,7 +27,7 @@ public class ThemeHelper {
         View root = activity.findViewById(R.id.main);
         if (root != null) {
             TypedValue bg = new TypedValue();
-            activity.getTheme().resolveAttribute(android.R.attr.colorBackground, bg, true);
+            activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorSurface, bg, true);
             root.setBackgroundColor(bg.data);
             // Text colors in view tree
             refreshViewTree(activity, root);
@@ -38,11 +38,11 @@ public class ThemeHelper {
         if (view instanceof TextView) {
             TextView tv = (TextView) view;
             TypedValue tc = new TypedValue();
-            activity.getTheme().resolveAttribute(android.R.attr.textColorPrimary, tc, true);
+            activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurface, tc, true);
             tv.setTextColor(tc.data);
             if (view instanceof EditText) {
                 TypedValue hc = new TypedValue();
-                activity.getTheme().resolveAttribute(android.R.attr.textColorHint, hc, true);
+                activity.getTheme().resolveAttribute(com.google.android.material.R.attr.colorOnSurfaceVariant, hc, true);
                 ((EditText) view).setHintTextColor(hc.data);
             }
         }
