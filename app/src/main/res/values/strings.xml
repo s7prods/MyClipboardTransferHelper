@@ -103,4 +103,7 @@
     <string name="keepalive_channel_name">Connected</string>
     <string name="keepalive_channel_desc">A connection is active</string>
     <string name="keepalive_notification_text">Connection active</string>
+    <string name="open_in_documents">Open in Documents</string>
+    <string name="documentsui_not_found">Documents app not available</string>
+    <string name="zero_number">0</string>
 </resources>

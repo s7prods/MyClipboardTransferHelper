@@ -10,10 +10,10 @@ configure<ApplicationExtension> {
 
     defaultConfig {
         applicationId = "top.clspd.apps.MyClipboardTransferHelper"
-        minSdk = 26
+        minSdk = 25
         targetSdk = 37
-        versionCode = 6
-        versionName = "3.0.0-release-vn-6"
+        versionCode = 8
+        versionName = "3.1.0-release-vn-8"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

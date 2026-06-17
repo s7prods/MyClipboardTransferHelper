@@ -18,21 +18,33 @@ public class KeepAliveService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        NotificationManager nm = getSystemService(NotificationManager.class);
-        NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, getString(R.string.keepalive_channel_name), NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription(getString(R.string.keepalive_channel_desc));
-        nm.createNotificationChannel(channel);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            NotificationChannel channel = new NotificationChannel(
+                    CHANNEL_ID, getString(R.string.keepalive_channel_name), NotificationManager.IMPORTANCE_LOW);
+            channel.setDescription(getString(R.string.keepalive_channel_desc));
+            nm.createNotificationChannel(channel);
+        }
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Notification notification = new Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle(getString(R.string.app_name))
-                .setContentText(getString(R.string.keepalive_notification_text))
-                .setSmallIcon(R.mipmap.ic_launcher)
-                .setOngoing(true)
-                .build();
+        Notification notification;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            notification = new Notification.Builder(this, CHANNEL_ID)
+                    .setContentTitle(getString(R.string.app_name))
+                    .setContentText(getString(R.string.keepalive_notification_text))
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setOngoing(true)
+                    .build();
+        } else {
+            notification = new Notification.Builder(this)
+                    .setContentTitle(getString(R.string.app_name))
+                    .setContentText(getString(R.string.keepalive_notification_text))
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setOngoing(true)
+                    .build();
+        }
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

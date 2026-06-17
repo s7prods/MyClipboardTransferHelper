@@ -3,6 +3,7 @@ package app.MyApp.MyClipboardTransferHelper.management;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.DocumentsContract;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -70,6 +71,17 @@ public class InternalReceivedFilesManagementActivity extends AppCompatActivity {
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_open_in_documents) {
+            String authority = getPackageName() + ".documents";
+            Uri rootUri = DocumentsContract.buildRootUri(authority, getPackageName());
+            Intent intent = new Intent(Intent.ACTION_VIEW, rootUri);
+            if (intent.resolveActivity(getPackageManager()) != null) {
+                startActivity(intent);
+            } else {
+                Toast.makeText(this, R.string.documentsui_not_found, Toast.LENGTH_SHORT).show();
+            }
+            return true;
+        }
         if (item.getItemId() == R.id.action_delete_all) {
             new AlertDialog.Builder(this)
                     .setTitle(R.string.delete_all_files)

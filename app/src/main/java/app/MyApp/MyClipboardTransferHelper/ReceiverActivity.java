@@ -63,6 +63,7 @@ public class ReceiverActivity extends AppCompatActivity {
     private EditText editTextPassword;
     private CheckBox checkBoxNeedConfirm;
     private Spinner saveLocationSpinner;
+    private EditText editTextPort;
     private Button buttonStart;
     private int port = 0;
 
@@ -93,6 +94,7 @@ public class ReceiverActivity extends AppCompatActivity {
         checkBoxNeedConfirm = findViewById(R.id.checkBox);
         saveLocationSpinner = findViewById(R.id.spinner);
         buttonStart = findViewById(R.id.buttonStart);
+        editTextPort = findViewById(R.id.editTextNumberSigned2);
 
         // Load saved password
         passwordFile = new File(getFilesDir(), AppClass.RECEIVER_DIR + File.separator + AppClass.PASSWORD_FILE);
@@ -115,6 +117,7 @@ public class ReceiverActivity extends AppCompatActivity {
         SharedPreferences prefs = getSharedPreferences("app_prefs", MODE_PRIVATE);
         checkBoxNeedConfirm.setChecked(prefs.getBoolean("receiver_need_confirm", false));
         saveLocationSpinner.setSelection(prefs.getInt("receiver_save_location", 0));
+        editTextPort.setText(String.valueOf(prefs.getInt("receiver_port", 0)));
 
         // Register launcher for confirmation activity
         confirmLauncher = registerForActivityResult(
@@ -210,12 +213,22 @@ public class ReceiverActivity extends AppCompatActivity {
             Log.e(TAG, "failed to save password", e);
         }
 
+        int parsed;
+        try {
+            parsed = Integer.parseInt(editTextPort.getText().toString().trim());
+            if (parsed < 0) parsed = 0;
+            if (parsed > 65535) parsed = 65535;
+        } catch (NumberFormatException e) {
+            parsed = 0;
+        }
+        final int requestedPort = parsed;
+
         serverThread = new Thread(() -> {
             try {
                 File certFile = new File(getFilesDir(), AppClass.RECEIVER_DIR + File.separator + AppClass.CERT_FILE);
                 File keyFile = new File(getFilesDir(), AppClass.RECEIVER_DIR + File.separator + AppClass.KEY_FILE);
                 SSLContext sslContext = CryptoHelper.createServerSSLContext(certFile, keyFile);
-                serverSocket = (SSLServerSocket) sslContext.getServerSocketFactory().createServerSocket(0);
+                serverSocket = (SSLServerSocket) sslContext.getServerSocketFactory().createServerSocket(requestedPort);
                 port = serverSocket.getLocalPort();
                 started = true;
 
@@ -692,10 +705,18 @@ public class ReceiverActivity extends AppCompatActivity {
     @Override
     protected void onPause() {
         super.onPause();
+        int p;
+        try {
+            p = Integer.parseInt(editTextPort.getText().toString().trim());
+            if (p < 0 || p > 65535) p = 0;
+        } catch (NumberFormatException e) {
+            p = 0;
+        }
         getSharedPreferences("app_prefs", MODE_PRIVATE)
                 .edit()
                 .putBoolean("receiver_need_confirm", checkBoxNeedConfirm.isChecked())
                 .putInt("receiver_save_location", saveLocationSpinner.getSelectedItemPosition())
+                .putInt("receiver_port", p)
                 .apply();
     }
 

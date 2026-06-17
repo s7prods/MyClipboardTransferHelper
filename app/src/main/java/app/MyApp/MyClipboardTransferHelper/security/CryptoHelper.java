@@ -54,7 +54,7 @@ public class CryptoHelper {
     private static byte[] generateSelfSignedCertDer(KeyPair keyPair, String dn) throws Exception {
         String cn = extractCN(dn);
         long notBefore = System.currentTimeMillis() - 24L * 60 * 60 * 1000;
-        long notAfter = System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000;
+        long notAfter = System.currentTimeMillis() + 365L * 100 * 24 * 60 * 60 * 1000;
         BigInteger serial = BigInteger.valueOf(System.currentTimeMillis());
 
         byte[] pubKeyEncoded = keyPair.getPublic().getEncoded();
