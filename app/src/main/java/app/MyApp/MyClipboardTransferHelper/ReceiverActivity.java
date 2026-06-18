@@ -48,6 +48,7 @@ import app.MyApp.MyClipboardTransferHelper.protocol.TLVHelper;
 import app.MyApp.MyClipboardTransferHelper.security.CryptoHelper;
 import app.MyApp.MyClipboardTransferHelper.security.ReceiverNewConnectionConfirmActivity;
 import app.MyApp.MyClipboardTransferHelper.services.KeepAliveService;
+import app.MyApp.MyClipboardTransferHelper.util.PermissionHelper;
 import app.MyApp.MyClipboardTransferHelper.util.ThemeHelper;
 import top.clspd.apps.MyClipboardTransferHelper.R;
 
@@ -194,7 +195,9 @@ public class ReceiverActivity extends AppCompatActivity {
         if (started) {
             stopServer();
         } else {
-            startServer();
+            PermissionHelper.promptLocalNetworkPermission(this,
+                    getSharedPreferences("app_prefs", MODE_PRIVATE),
+                    () -> startServer());
         }
     }
 

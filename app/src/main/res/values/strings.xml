@@ -106,4 +106,7 @@
     <string name="open_in_documents">Open in Documents</string>
     <string name="documentsui_not_found">Documents app not available</string>
     <string name="zero_number">0</string>
+    <string name="access_local_network_prompt_dialog_title">Access Local Network</string>
+    <string name="access_local_network_prompt_dialog_content">As a local data transfer tool, the application needs the permission to access your local network so that you can connect to another device and send your data. If you don\'t allow this permission, the application can still work, but you\'ll be unable to connect to another device in your local network.\nDo you want to grant this permission now?</string>
+    <string name="access_local_network_denied_toast_content">You\'d disallowed the application to access your local network. Some connection might fail.</string>
 </resources>

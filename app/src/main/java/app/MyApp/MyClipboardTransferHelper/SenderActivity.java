@@ -52,6 +52,7 @@ import app.AppLogic.MainAppLogic.MyClipboardTransferHelper.AppClass;
 import app.MyApp.MyClipboardTransferHelper.protocol.TLVHelper;
 import app.MyApp.MyClipboardTransferHelper.security.CryptoHelper;
 import app.MyApp.MyClipboardTransferHelper.services.KeepAliveService;
+import app.MyApp.MyClipboardTransferHelper.util.PermissionHelper;
 import app.MyApp.MyClipboardTransferHelper.util.ThemeHelper;
 import top.clspd.apps.MyClipboardTransferHelper.R;
 
@@ -160,7 +161,9 @@ public class SenderActivity extends AppCompatActivity {
         if (connected) {
             disconnect();
         } else {
-            connect();
+            PermissionHelper.promptLocalNetworkPermission(this,
+                    getSharedPreferences("app_prefs", MODE_PRIVATE),
+                    () -> connect());
         }
     }
 
@@ -781,7 +784,7 @@ public class SenderActivity extends AppCompatActivity {
         int exp = (int) (Math.log(bytes) / Math.log(1024));
         if (exp < 1) exp = 1;
         char prefix = "KMGTPE".charAt(exp - 1);
-        return String.format(java.util.Locale.US, "%.1f %cB", bytes / Math.pow(1024, exp), prefix);
+        return String.format(java.util.Locale.US, "%.1f %cIB", bytes / Math.pow(1024, exp), prefix);
     }
 
     private void resetUI() {
